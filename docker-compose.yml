@@ -1,5 +1,3 @@
-# docker-compose.yml
-
 version: '3.8'
 
 services:
@@ -9,12 +7,53 @@ services:
     environment:
       POSTGRES_DB: garmin
       POSTGRES_USER: runner
-      POSTGRES_PASSWORD: securepass123
+      POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
       - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
+
+  backend:
+    build:
+      context: .  # ← текущая директория: /opt/garmin_dashboard
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: garmin
+      DB_USER: runner
+      DB_PASS: ${DB_PASS}
+    depends_on: [db]
+    expose: [8000]
+
+  frontend:
+    build:
+      context: .  # ← текущая директория
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "80:80"
+
+  sync:
+    build:
+      context: .  # ← текущая директория
+      dockerfile: sync/Dockerfile
+    restart: "no"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: garmin
+      DB_USER: runner
+      DB_PASS: ${DB_PASS}
+      GARMIN_EMAIL: ${GARMIN_EMAIL}
+      GARMIN_PASSWORD: ${GARMIN_PASSWORD}
+    volumes:
+      - ./.env:/app/.env:ro
+    command: python sync/sync_garmin.py
+    depends_on: [db]
 
 volumes:
   pgdata:
