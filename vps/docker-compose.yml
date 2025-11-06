@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: garmin
+      POSTGRES_USER: runner
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: garmin
+      DB_USER: runner
+      DB_PASS: ${DB_PASS}
+    depends_on: [db]
+    expose: [8000]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "80:80"
+
+  sync:
+    build: .
+    restart: "no"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: garmin
+      DB_USER: runner
+      DB_PASS: ${DB_PASS}
+      GARMIN_EMAIL: ${GARMIN_EMAIL}
+      GARMIN_PASSWORD: ${GARMIN_PASSWORD}
+    volumes:
+      - ./.env:/app/.env:ro
+    command: python sync/sync_garmin.py
+    depends_on: [db]
+
+volumes:
+  pgdata
