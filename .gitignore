@@ -36,7 +36,7 @@ env/
 
 # Docker
 .dockerignore
-!docker/
+
 
 # Logs
 logs/
