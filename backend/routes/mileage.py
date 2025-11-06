@@ -1,19 +1,20 @@
 # backend/routes/mileage.py
 from fastapi import APIRouter
 from backend.db import get_db_connection
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 router = APIRouter()
 
 def get_monthly_stats(conn):
     with conn.cursor() as cur:
+        # Текущий и прошлый месяц (с 1-го числа, включая сегодня)
         cur.execute("""
             SELECT
                 EXTRACT(YEAR FROM start_time_utc) AS year,
                 EXTRACT(MONTH FROM start_time_utc) AS month,
                 SUM(distance_km) AS total_km
             FROM activities
-            WHERE start_time_utc >= date_trunc('month', current_date - interval '1 month')
+            WHERE start_time_utc >= date_trunc('month', now() - interval '1 month')
             GROUP BY year, month
             ORDER BY year, month;
         """)
@@ -31,7 +32,7 @@ def get_monthly_stats(conn):
 
 def get_weekly_stats(conn):
     with conn.cursor() as cur:
-        # Неделя по ISO (понедельник–воскресенье)
+        # Неделя по ISO (понедельник–воскресенье), за последние 12 недель
         cur.execute("""
             SELECT
                 DATE_TRUNC('week', start_time_utc) AS week_start,
@@ -51,20 +52,24 @@ def get_weekly_stats(conn):
 
 def get_last_7_days(conn):
     with conn.cursor() as cur:
+        # Ровно последние 7 календарных дней, включая сегодня
         cur.execute("""
             SELECT COALESCE(SUM(distance_km), 0) AS total_km
             FROM activities
-            WHERE start_time_utc >= %s;
-        """, (datetime.now(timezone.utc) - timedelta(days=7),))
+            WHERE start_time_utc >= date_trunc('day', now() - interval '6 days')
+              AND start_time_utc < date_trunc('day', now() + interval '1 day');
+        """)
         row = cur.fetchone()
         return float(round(row["total_km"], 2))
 
 def get_current_week(conn):
     with conn.cursor() as cur:
+        # С начала текущей ISO-недели (понедельник) до сегодня
         cur.execute("""
             SELECT COALESCE(SUM(distance_km), 0) AS total_km
             FROM activities
-            WHERE start_time_utc >= date_trunc('week', current_date);
+            WHERE start_time_utc >= date_trunc('week', now())
+              AND start_time_utc < date_trunc('day', now() + interval '1 day');
         """)
         row = cur.fetchone()
         return float(round(row["total_km"], 2))
